@@ -1,0 +1,203 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum AccountType {
+  SAVINGS
+  CURRENT
+  CREDIT_CARD
+  LOAN
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+}
+
+enum TransactionCategory {
+  FOOD
+  TRANSPORT
+  SHOPPING
+  UTILITIES
+  ENTERTAINMENT
+  HEALTH
+  EDUCATION
+  SALARY
+  TRANSFER
+  ATM
+  EMI
+  OTHER
+}
+
+enum TransactionMode {
+  UPI
+  UPI_MANDATE
+  CARD
+  NEFT
+  IMPS
+  RTGS
+  ATM
+  EMI
+  BILL_DUE
+  OTHER
+}
+
+// ─── Better Auth Models ───────────────────────────────────────────────────────
+
+model user {
+  id            String   @id
+  name          String
+  email         String   @unique
+  emailVerified Boolean
+  image         String?
+  phone         String?
+  avatar        String?
+  createdAt     DateTime
+  updatedAt     DateTime
+
+  // Better Auth relations
+  sessions     session[]
+  authAccounts account[]
+
+  // App relations
+  banks        Bank[]
+  bankAccounts BankAccount[]
+  transactions Transaction[]
+  smsLogs      SmsLog[]
+}
+
+model session {
+  id        String   @id
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime
+  updatedAt DateTime
+
+  user user @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model account {
+  id                    String    @id
+  userId                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime
+  updatedAt             DateTime
+
+  user user @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model verification {
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime?
+  updatedAt  DateTime?
+}
+
+// ─── App Models ───────────────────────────────────────────────────────────────
+
+model Bank {
+  id         String   @id @default(uuid())
+  userId     String
+  name       String
+  shortCode  String
+  smsPattern String
+  logoUrl    String?
+  color      String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user         user          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accounts     BankAccount[]
+  transactions Transaction[]
+
+  @@unique([userId, shortCode])
+}
+
+model BankAccount {
+  id             String      @id @default(uuid())
+  userId         String
+  bankId         String
+  accountNumber  String
+  accountType    AccountType @default(SAVINGS)
+  nickname       String?
+  currentBalance Decimal     @default(0) @db.Decimal(15, 2)
+  currency       String      @default("INR")
+  isActive       Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  user         user          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bank         Bank          @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@unique([userId, bankId, accountNumber])
+}
+
+model Transaction {
+  id          String              @id @default(uuid())
+  userId      String
+  accountId   String
+  bankId      String
+  type        TransactionType
+  amount      Decimal             @db.Decimal(15, 2)
+  currency    String              @default("INR")
+  balance     Decimal?            @db.Decimal(15, 2)
+  description     String
+  merchant        String?
+  fromIdentifier  String?
+  toIdentifier    String?
+  transactionMode TransactionMode     @default(UPI)
+  category        TransactionCategory @default(OTHER)
+  rawSms          String
+  smsDate         DateTime
+  reference       String?
+  isVerified      Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  user    user        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account BankAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  bank    Bank        @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  smsLog  SmsLog?
+
+  @@index([userId, smsDate])
+  @@index([userId, type])
+  @@index([userId, category])
+}
+
+model SmsLog {
+  id                  String   @id @default(uuid())
+  userId              String
+  sender              String
+  body                String
+  receivedAt          DateTime
+  isParsed            Boolean  @default(false)
+  parsedTransactionId String?  @unique
+  parseError          String?
+  createdAt           DateTime @default(now())
+
+  user              user         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parsedTransaction Transaction? @relation(fields: [parsedTransactionId], references: [id])
+
+  @@index([userId, isParsed])
+}

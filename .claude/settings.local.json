@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm init -y)",
+      "Bash(npm install express@latest cors@latest helmet@latest dotenv@latest express-rate-limit@latest compression@latest morgan@latest zod@latest winston@latest bcryptjs@latest jsonwebtoken@latest prisma@latest @prisma/client@latest @prisma/adapter-neon@latest @neondatabase/serverless@latest node-cache@latest uuid@latest @types/uuid@latest)",
+      "Bash(npx prisma init --datasource-provider postgresql)",
+      "Bash(npx prisma generate)",
+      "Bash(npx prisma migrate dev --name init)",
+      "Bash(npx tsx prisma/seed.ts)",
+      "Bash(npm install better-auth@latest)",
+      "Bash(printf 'import \"\"dotenv/config\"\";\\\\nimport { PrismaClient } from \"\"@prisma/client\"\";\\\\nimport { PrismaNeon } from \"\"@prisma/adapter-neon\"\";\\\\n\\\\nconst adapter = new PrismaNeon\\({\\\\n  connectionString: process.env.DATABASE_URL!,\\\\n}\\);\\\\n\\\\nexport const prisma = new PrismaClient\\({ adapter }\\);\\\\n')",
+      "Bash(\"c:/Users/HP/Desktop/New folder/banking-tracker/banking-tracker-api/src/config/database.ts\")",
+      "Bash(npx better-auth migrate)",
+      "Bash(./node_modules/.bin/better-auth migrate)",
+      "Bash(node -e \"const ba = require\\(''better-auth''\\); console.log\\(Object.keys\\(ba\\)\\)\")",
+      "Bash(node -e \"const d=require\\(''fs''\\).readFileSync\\(''/dev/stdin'',''utf8''\\); const p=JSON.parse\\(d\\); console.log\\(''bin:'', JSON.stringify\\(p.bin\\)\\); console.log\\(''version:'', p.version\\)\")",
+      "Bash(node -e \"const p=require\\(''c:/Users/HP/Desktop/New folder/banking-tracker/banking-tracker-api/node_modules/better-auth/package.json''\\); console.log\\(''version:'', p.version\\); console.log\\(''bin:'', JSON.stringify\\(p.bin\\)\\);\")",
+      "Bash(npx prisma migrate dev --name better-auth-schema)",
+      "Bash(npx prisma migrate reset --force)",
+      "Bash(PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=\"yes\" npx prisma migrate reset --force)",
+      "Bash(npx prisma migrate dev --name rename-account-to-bankaccount)"
+    ]
+  }
+}
