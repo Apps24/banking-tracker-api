@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon --exec tsx src/index.ts",
-    "build": "prisma generate && tsc",
+    "build": "prisma generate && esbuild api/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js --external:@prisma/client --external:prisma",
     "start": "node dist/index.js",
     "postinstall": "prisma generate",
     "db:generate": "prisma generate",
@@ -33,6 +33,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/morgan": "^1.9.10",
     "@types/node": "^25.3.5",
+    "esbuild": "^0.25.0",
     "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
