@@ -14,7 +14,7 @@ if (!connectionString) {
   );
 }
 
-const adapter = new PrismaNeonHttp(connectionString);
+const adapter = new PrismaNeonHttp(connectionString, {});
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
