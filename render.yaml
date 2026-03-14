@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: banking-tracker-api
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_UNPOOLED
+        sync: false
+      - key: BETTER_AUTH_SECRET
+        sync: false
+      - key: BETTER_AUTH_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: BCRYPT_ROUNDS
+        sync: false
