@@ -1,6 +1,3 @@
-import path from "path";
-import dotenv from "dotenv";
-dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 import { betterAuth } from "better-auth";
 import { bearer } from "better-auth/plugins";
 import { prismaAdapter } from "better-auth/adapters/prisma";
