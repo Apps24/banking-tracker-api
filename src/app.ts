@@ -5,7 +5,7 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import compression from "compression";
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID } from "crypto";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth";
 import { logger } from "./config/logger";
@@ -36,7 +36,7 @@ app.use(morgan(isProd ? "combined" : "dev", { stream: { write: (msg) => logger.h
 
 // Request ID
 app.use((req: Request, res: Response, next: NextFunction) => {
-  req.requestId = uuidv4();
+  req.requestId = randomUUID();
   res.setHeader("X-Request-Id", req.requestId);
   next();
 });
