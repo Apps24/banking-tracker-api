@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
+import { z } from "zod";
 import { responseHelper } from "../utils/responseHelper";
 import {
   getTransactions, getTransaction, updateTransaction,
@@ -6,6 +7,20 @@ import {
 } from "../services/transaction.service";
 import type { TransactionFilters } from "../services/transaction.service";
 import { TransactionType, TransactionCategory, TransactionMode } from "@prisma/client";
+
+// ── Validation schemas ─────────────────────────────────────────────────────────
+
+const smsSchema = z.object({
+  sender:     z.string().min(1).max(50),
+  body:       z.string().min(1).max(2000),
+  receivedAt: z.string().datetime({ message: "Must be ISO-8601 datetime" }).optional(),
+});
+
+const batchSmsSchema = z.object({
+  messages: z.array(smsSchema).min(1).max(500),
+});
+
+// ── Controllers ───────────────────────────────────────────────────────────────
 
 export const list = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -52,7 +67,7 @@ export const remove = async (req: Request, res: Response, next: NextFunction) =>
 
 export const processSms = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { sender, body, receivedAt } = req.body as { sender: string; body: string; receivedAt?: string };
+    const { sender, body, receivedAt } = smsSchema.parse(req.body);
     const tx = await processSingleSms(req.userId, sender, body, receivedAt ? new Date(receivedAt) : new Date());
     if (!tx) {
       responseHelper.success(res, null, "SMS received but could not be parsed as a transaction");
@@ -64,7 +79,7 @@ export const processSms = async (req: Request, res: Response, next: NextFunction
 
 export const processBatch = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { messages } = req.body as { messages: Array<{ sender: string; body: string; receivedAt?: string }> };
+    const { messages } = batchSmsSchema.parse(req.body);
     const normalized = messages.map((m) => ({
       sender: m.sender,
       body: m.body,

@@ -1,9 +1,15 @@
 import { Router } from "express";
+import { z } from "zod";
 import { requireAuth } from "../middlewares/auth.middleware";
 import { prisma } from "../config/database";
 import { responseHelper } from "../utils/responseHelper";
 
 const router = Router();
+
+const updateProfileSchema = z.object({
+  phone:  z.string().max(20).regex(/^[\d\s\-\+\(\)]+$/, "Invalid phone number").optional(),
+  avatar: z.string().url("Must be a valid URL").max(2048).optional(),
+});
 
 // GET /api/v1/auth/me — return full profile from our DB
 router.get("/me", requireAuth, async (req, res, next) => {
@@ -25,11 +31,11 @@ router.get("/me", requireAuth, async (req, res, next) => {
 // PATCH /api/v1/auth/profile — update phone + avatar
 router.patch("/profile", requireAuth, async (req, res, next) => {
   try {
-    const { phone, avatar } = req.body as { phone?: string; avatar?: string };
+    const { phone, avatar } = updateProfileSchema.parse(req.body);
     const updated = await prisma.user.update({
       where: { id: req.userId },
       data: {
-        ...(phone !== undefined && { phone }),
+        ...(phone  !== undefined && { phone }),
         ...(avatar !== undefined && { avatar }),
       },
       select: { id: true, name: true, email: true, phone: true, avatar: true, updatedAt: true },

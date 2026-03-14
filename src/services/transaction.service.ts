@@ -93,7 +93,7 @@ export async function updateTransaction(
   const existing = await prisma.transaction.findFirst({ where: { id, userId } });
   if (!existing) throw new AppError("Transaction not found", 404);
   return prisma.transaction.update({
-    where: { id },
+    where: { id, userId },
     data: {
       ...(data.category    !== undefined && { category: data.category }),
       ...(data.merchant    !== undefined && { merchant: data.merchant }),

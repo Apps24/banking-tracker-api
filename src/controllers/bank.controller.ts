@@ -1,7 +1,27 @@
 import type { Request, Response, NextFunction } from "express";
+import { z } from "zod";
 import { prisma } from "../config/database";
 import { responseHelper } from "../utils/responseHelper";
 import { AppError } from "../middlewares/error.middleware";
+
+// ── Validation schemas ─────────────────────────────────────────────────────────
+
+const createBankSchema = z.object({
+  name:       z.string().min(1).max(100),
+  shortCode:  z.string().min(2).max(10).regex(/^[A-Za-z0-9]+$/, "Letters and numbers only"),
+  smsPattern: z.string().min(1).max(500).refine((p) => {
+    try { new RegExp(p, "i"); return true; } catch { return false; }
+  }, "Invalid regular expression"),
+  color:   z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Must be a hex colour e.g. #FF5733"),
+  logoUrl: z.string().url().max(2048).optional().or(z.literal("")),
+});
+
+const updateAccountSchema = z.object({
+  nickname: z.string().min(1).max(100).optional(),
+  isActive: z.boolean().optional(),
+});
+
+// ── Controllers ───────────────────────────────────────────────────────────────
 
 export const listBanks = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -16,11 +36,16 @@ export const listBanks = async (req: Request, res: Response, next: NextFunction)
 
 export const createBank = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, shortCode, smsPattern, color, logoUrl } = req.body as {
-      name: string; shortCode: string; smsPattern: string; color: string; logoUrl?: string;
-    };
+    const { name, shortCode, smsPattern, color, logoUrl } = createBankSchema.parse(req.body);
     const bank = await prisma.bank.create({
-      data: { userId: req.userId, name, shortCode: shortCode.toUpperCase(), smsPattern, color, logoUrl },
+      data: {
+        userId: req.userId,
+        name,
+        shortCode: shortCode.toUpperCase(),
+        smsPattern,
+        color,
+        ...(logoUrl ? { logoUrl } : {}),
+      },
     });
     responseHelper.success(res, bank, "Bank created", 201);
   } catch (err) { next(err); }
@@ -57,9 +82,9 @@ export const updateAccount = async (req: Request, res: Response, next: NextFunct
     const acct = await prisma.bankAccount.findFirst({ where: { id, userId: req.userId } });
     if (!acct) throw new AppError("Account not found", 404);
 
-    const { nickname, isActive } = req.body as { nickname?: string; isActive?: boolean };
+    const { nickname, isActive } = updateAccountSchema.parse(req.body);
     const updated = await prisma.bankAccount.update({
-      where: { id },
+      where: { id, userId: req.userId },
       data: {
         ...(nickname  !== undefined && { nickname }),
         ...(isActive  !== undefined && { isActive }),
