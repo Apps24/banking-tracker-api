@@ -25,6 +25,15 @@ const batchSmsSchema = z.object({
 export const list = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const q = req.query as Record<string, string>;
+    // Support shorthand sort param: "date_desc" → sortBy=smsDate, sortOrder=desc
+    let sortBy  = q.sortBy  as TransactionFilters["sortBy"];
+    let sortOrder = q.sortOrder as "asc" | "desc" | undefined;
+    if (q.sort) {
+      const [field, order] = q.sort.split("_");
+      sortBy    = (field === "date" ? "smsDate" : field === "amount" ? "amount" : "smsDate") as TransactionFilters["sortBy"];
+      sortOrder = (order === "asc" ? "asc" : "desc");
+    }
+
     const filters: TransactionFilters = {
       page:   q.page   ? parseInt(q.page)  : undefined,
       limit:  q.limit  ? parseInt(q.limit) : undefined,
@@ -33,11 +42,12 @@ export const list = async (req: Request, res: Response, next: NextFunction) => {
       type:   q.type   as TransactionType | undefined,
       bankId: q.bankId,
       accountId: q.accountId,
-      category: q.category as TransactionCategory | undefined,
+      category:   q.category   as TransactionCategory | undefined,
+      categories: q.categories,
       transactionMode: q.transactionMode as TransactionMode | undefined,
       search:    q.search,
-      sortBy:    q.sortBy as TransactionFilters["sortBy"],
-      sortOrder: q.sortOrder as "asc" | "desc" | undefined,
+      sortBy,
+      sortOrder,
     };
     const { transactions, total, page, limit } = await getTransactions(req.userId, filters);
     responseHelper.paginated(res, transactions, { page, limit, total });

@@ -14,6 +14,7 @@ export type TransactionFilters = {
   bankId?: string;
   accountId?: string;
   category?: TransactionCategory;
+  categories?: string;          // comma-separated, e.g. "FOOD,SHOPPING"
   transactionMode?: TransactionMode;
   search?: string;
   sortBy?: "smsDate" | "amount" | "createdAt";
@@ -27,12 +28,22 @@ function buildWhere(userId: string, f: TransactionFilters): Prisma.TransactionWh
   if (f.type) where.type = f.type;
   if (f.bankId) where.bankId = f.bankId;
   if (f.accountId) where.accountId = f.accountId;
-  if (f.category) where.category = f.category;
+
+  // Single category OR multi-category (comma-separated)
+  if (f.categories) {
+    const cats = f.categories.split(",").map((c) => c.trim()).filter(Boolean) as TransactionCategory[];
+    if (cats.length === 1) where.category = cats[0];
+    else if (cats.length > 1) where.category = { in: cats };
+  } else if (f.category) {
+    where.category = f.category;
+  }
+
   if (f.transactionMode) where.transactionMode = f.transactionMode;
   if (f.startDate || f.endDate) {
     where.smsDate = {};
-    if (f.startDate) where.smsDate.gte = new Date(f.startDate);
-    if (f.endDate)   where.smsDate.lte = new Date(f.endDate + "T23:59:59.999Z");
+    // Use start of day and end of day in IST (+05:30) to avoid timezone boundary issues
+    if (f.startDate) where.smsDate.gte = new Date(f.startDate + "T00:00:00.000+05:30");
+    if (f.endDate)   where.smsDate.lte = new Date(f.endDate   + "T23:59:59.999+05:30");
   }
   if (f.search) {
     const q = f.search.trim();
