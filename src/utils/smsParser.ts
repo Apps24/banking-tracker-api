@@ -46,6 +46,13 @@ function parseDate(dateStr: string): Date {
     return new Date(`20${yy}-${mm}-${dd}T00:00:00+05:30`);
   }
 
+  // "DD-MM-YYYY" e.g. "21-02-2026"
+  const dashNum4Match = dateStr.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (dashNum4Match) {
+    const [, dd, mm, yyyy] = dashNum4Match;
+    return new Date(`${yyyy}-${mm}-${dd}T00:00:00+05:30`);
+  }
+
   // "DD-MM-YY" e.g. "27-02-26"
   const dashNumMatch = dateStr.match(/^(\d{2})-(\d{2})-(\d{2})$/);
   if (dashNumMatch) {
@@ -230,6 +237,36 @@ function tryDbs(body: string): ParsedSms | null {
       accountNumber: d3[2], toIdentifier: merchant, merchant,
       transactionDate: parseDate(d3[5]), reference: d3[6],
       transactionMode: mode, category: categorize(merchant, merchant, undefined, mode),
+    };
+  }
+
+  // D4 — "Dear Customer, Your account no ****9759 is debited with INR X on DD-MM-YYYY. Current Balance is INRX"
+  const d4 = body.match(
+    /account no\s+[*]+(\d{4})\s+is debited with INR\s*([\d,]+\.?\d*)\s+on\s+([\d-]+)\..*?Current Balance is INR\s*([\d,]+\.?\d*)/i,
+  );
+  if (d4) {
+    const mode = detectTransactionMode(body);
+    return {
+      type: "DEBIT", amount: parseAmount(d4[2]), currency: "INR",
+      accountNumber: d4[1], transactionDate: parseDate(d4[3]),
+      balance: parseAmount(d4[4]),
+      transactionMode: mode, category: categorize(undefined, undefined, undefined, mode),
+      bankShortCode: "DBS",
+    };
+  }
+
+  // D5 — "Your account no ****XXXX is credited with INR X on DD-MM-YYYY. Current Balance is INRX"
+  const d5 = body.match(
+    /account no\s+[*]+(\d{4})\s+is credited with INR\s*([\d,]+\.?\d*)\s+on\s+([\d-]+)\..*?Current Balance is INR\s*([\d,]+\.?\d*)/i,
+  );
+  if (d5) {
+    const mode = detectTransactionMode(body);
+    return {
+      type: "CREDIT", amount: parseAmount(d5[2]), currency: "INR",
+      accountNumber: d5[1], transactionDate: parseDate(d5[3]),
+      balance: parseAmount(d5[4]),
+      transactionMode: mode, category: categorize(undefined, undefined, undefined, mode),
+      bankShortCode: "DBS",
     };
   }
 
