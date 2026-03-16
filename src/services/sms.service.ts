@@ -26,19 +26,32 @@ export async function processRawSms(
   body: string,
   receivedAt: Date,
 ) {
+  logger.info("━━━ [SMS PIPELINE START] ━━━", { sender, bodyPreview: body.slice(0, 80) });
+
   // 1. Create SmsLog record
   const smsLog = await prisma.smsLog.create({
     data: { userId, sender, body, receivedAt },
   });
+  logger.info("[STEP 1] SmsLog created", { smsLogId: smsLog.id });
 
   // 2. Parse SMS
   const parsed = parseSms(sender, body);
+  logger.info("[STEP 2] parseSms result", {
+    matched: !!parsed,
+    type: parsed?.type,
+    amount: parsed?.amount,
+    currency: parsed?.currency,
+    bankShortCode: parsed?.bankShortCode,
+    transactionMode: parsed?.transactionMode,
+    isBillDue: parsed?.isBillDue,
+  });
 
   if (!parsed) {
     await prisma.smsLog.update({
       where: { id: smsLog.id },
       data: { parseError: "NO_PATTERN_MATCHED" },
     });
+    logger.warn("[STEP 2] ❌ STOPPED — no regex pattern matched", { sender, body });
     return null;
   }
 
@@ -48,21 +61,34 @@ export async function processRawSms(
       where: { id: smsLog.id },
       data: { parseError: "BILL_DUE_SKIPPED" },
     });
+    logger.info("[STEP 3] ⏭  SKIPPED — bill due reminder, not a transaction");
     return null;
   }
 
   // 4. Find matching bank for this user by testing sender against smsPattern
   const banks = await prisma.bank.findMany({ where: { userId, isActive: true } });
+  logger.info("[STEP 4] Banks in DB for user", {
+    count: banks.length,
+    banks: banks.map((b) => ({ name: b.name, shortCode: b.shortCode, smsPattern: b.smsPattern })),
+  });
+
   let matchedBank = banks.find((b) => {
     try { return new RegExp(b.smsPattern, "i").test(sender); }
     catch { return false; }
   });
+
+  if (matchedBank) {
+    logger.info("[STEP 4] ✅ Bank matched by smsPattern", { bank: matchedBank.name, smsPattern: matchedBank.smsPattern });
+  }
 
   // Fallback: match by shortCode if parseSms identified one
   if (!matchedBank && parsed.bankShortCode) {
     matchedBank = banks.find(
       (b) => b.shortCode.toUpperCase() === parsed.bankShortCode!.toUpperCase(),
     );
+    if (matchedBank) {
+      logger.info("[STEP 4] ✅ Bank matched by shortCode fallback", { bank: matchedBank.name, shortCode: parsed.bankShortCode });
+    }
   }
 
   if (!matchedBank) {
@@ -70,7 +96,13 @@ export async function processRawSms(
       where: { id: smsLog.id },
       data: { parseError: "NO_BANK_MATCHED" },
     });
-    logger.warn("No bank matched for sender", { sender, userId });
+    logger.warn("[STEP 4] ❌ STOPPED — NO_BANK_MATCHED", {
+      sender,
+      parsedShortCode: parsed.bankShortCode,
+      hint: banks.length === 0
+        ? "No banks exist in DB for this user — add a bank first"
+        : "Sender does not match any smsPattern in the Bank table",
+    });
     return null;
   }
 
@@ -78,6 +110,7 @@ export async function processRawSms(
   const accountNumber = parsed.accountNumber ?? "0000";
   const accountType: AccountType =
     parsed.transactionMode === "CARD" ? "CREDIT_CARD" : "SAVINGS";
+  logger.info("[STEP 5] Looking up BankAccount", { accountNumber, bankId: matchedBank.id });
 
   let bankAccount = await prisma.bankAccount.findFirst({
     where: { userId, bankId: matchedBank.id, accountNumber },
@@ -87,7 +120,9 @@ export async function processRawSms(
     bankAccount = await prisma.bankAccount.create({
       data: { userId, bankId: matchedBank.id, accountNumber, accountType, currency: "INR" },
     });
-    logger.info("Auto-created bank account", { accountNumber, bankId: matchedBank.id });
+    logger.info("[STEP 5] ✅ BankAccount auto-created", { accountNumber, bankId: matchedBank.id });
+  } else {
+    logger.info("[STEP 5] ✅ BankAccount found", { accountId: bankAccount.id });
   }
 
   // 6. Build description
@@ -97,6 +132,15 @@ export async function processRawSms(
       : `Payment to ${parsed.merchant ?? parsed.toIdentifier ?? "unknown"}`;
 
   // 7. Create Transaction
+  logger.info("[STEP 7] Creating Transaction", {
+    type: parsed.type,
+    amount: parsed.amount,
+    currency: parsed.currency,
+    merchant: parsed.merchant,
+    transactionMode: parsed.transactionMode,
+    category: parsed.category,
+  });
+
   const transaction = await prisma.transaction.create({
     data: {
       userId,
@@ -117,6 +161,7 @@ export async function processRawSms(
       reference: parsed.reference,
     },
   });
+  logger.info("[STEP 7] ✅ Transaction created", { transactionId: transaction.id });
 
   // 8. Update account balance if provided
   if (parsed.balance !== undefined) {
@@ -124,6 +169,7 @@ export async function processRawSms(
       where: { id: bankAccount.id },
       data: { currentBalance: parsed.balance },
     });
+    logger.info("[STEP 8] ✅ BankAccount balance updated", { balance: parsed.balance });
   }
 
   // 9. Mark SmsLog as parsed
@@ -132,10 +178,10 @@ export async function processRawSms(
     data: { isParsed: true, parsedTransactionId: transaction.id },
   });
 
-  logger.info("SMS processed", {
+  logger.info("━━━ [SMS PIPELINE COMPLETE] ✅ ━━━", {
+    transactionId: transaction.id,
     type: parsed.type,
     amount: parsed.amount,
-    merchant: parsed.merchant,
     bank: matchedBank.shortCode,
   });
 
