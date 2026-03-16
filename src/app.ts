@@ -1,6 +1,7 @@
 import "dotenv/config";
 import "./config/env"; // validate env vars on startup
 import express, { type Request, type Response, type NextFunction } from "express";
+import { Prisma } from "@prisma/client";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
@@ -16,6 +17,12 @@ import v1Router from "./routes/index";
 
 const app = express();
 const isProd = process.env.NODE_ENV === "production";
+
+// Serialize Prisma Decimal fields as plain numbers (not strings) in all JSON responses
+app.set("json replacer", (_key: string, value: unknown) => {
+  if (value instanceof Prisma.Decimal) return value.toNumber();
+  return value;
+});
 
 // Better Auth handler (must be before body parsers)
 app.use("/api/auth", authLimiter);

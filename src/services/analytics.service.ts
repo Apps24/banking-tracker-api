@@ -95,9 +95,9 @@ async function _getSummary(
   });
 
   return {
-    totalCredit,
-    totalDebit,
-    netAmount: totalCredit - totalDebit,
+    totalInflow: totalCredit,
+    totalOutflow: totalDebit,
+    netBalance: totalCredit - totalDebit,
     transactionCount: count,
     avgAmount: Number(agg._avg.amount ?? 0),
     topCategory: catGroup[0]?.category ?? null,
@@ -283,7 +283,7 @@ async function _getCategoryBreakdown(
 
   return groups.map((g) => ({
     category:   g.category,
-    total:      Number(g._sum.amount ?? 0),
+    amount:     Number(g._sum.amount ?? 0),
     count:      g._count.id,
     percentage: grandTotal > 0 ? Math.round((Number(g._sum.amount ?? 0) / grandTotal) * 10000) / 100 : 0,
   }));
@@ -334,18 +334,19 @@ async function _getBankBreakdown(
 
   return Array.from(byBank.entries())
     .map(([bankId, slot]) => {
-      const bank = bankMap.get(bankId);
+      const b = bankMap.get(bankId);
       return {
         bankId,
-        bankName:  bank?.name  ?? "Unknown",
-        bankColor: bank?.color ?? "#888",
+        bank:      b?.name  ?? "Unknown",
+        bankColor: b?.color ?? "#888",
+        total:  slot.credit + slot.debit,
         credit: slot.credit,
         debit:  slot.debit,
         net:    slot.credit - slot.debit,
         count:  slot.count,
       };
     })
-    .sort((a, b) => (b.credit + b.debit) - (a.credit + a.debit));
+    .sort((a, b) => b.total - a.total);
 }
 
 // ─── Trends ───────────────────────────────────────────────────────────────────
