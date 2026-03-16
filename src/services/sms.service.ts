@@ -28,6 +28,16 @@ export async function processRawSms(
 ) {
   logger.info("━━━ [SMS PIPELINE START] ━━━", { sender, bodyPreview: body.slice(0, 80) });
 
+  // 0. Exact-duplicate check — same user + sender + body already in SmsLog
+  const existingLog = await prisma.smsLog.findFirst({
+    where: { userId, sender, body },
+    select: { id: true, parsedTransactionId: true },
+  });
+  if (existingLog) {
+    logger.info("[STEP 0] ⏭  SKIPPED — exact duplicate SMS already in SmsLog", { existingLogId: existingLog.id });
+    return null;
+  }
+
   // 1. Create SmsLog record
   const smsLog = await prisma.smsLog.create({
     data: { userId, sender, body, receivedAt },
@@ -130,6 +140,35 @@ export async function processRawSms(
     parsed.type === "CREDIT"
       ? `Received from ${parsed.fromIdentifier ?? "unknown"}`
       : `Payment to ${parsed.merchant ?? parsed.toIdentifier ?? "unknown"}`;
+
+  // 6b. Semantic duplicate check — same account + amount + type on the same calendar day
+  const txDate = parsed.transactionDate ?? receivedAt;
+  const dayStart = new Date(txDate); dayStart.setHours(0, 0, 0, 0);
+  const dayEnd   = new Date(txDate); dayEnd.setHours(23, 59, 59, 999);
+
+  const semanticDup = await prisma.transaction.findFirst({
+    where: {
+      userId,
+      accountId: bankAccount.id,
+      type: parsed.type,
+      amount: parsed.amount,
+      smsDate: { gte: dayStart, lte: dayEnd },
+    },
+    select: { id: true },
+  });
+  if (semanticDup) {
+    await prisma.smsLog.update({
+      where: { id: smsLog.id },
+      data: { parseError: "DUPLICATE_TRANSACTION", parsedTransactionId: semanticDup.id },
+    });
+    logger.info("[STEP 6b] ⏭  SKIPPED — semantic duplicate (same account/amount/type/day)", {
+      existingTransactionId: semanticDup.id,
+      amount: parsed.amount,
+      type: parsed.type,
+      day: dayStart.toISOString().slice(0, 10),
+    });
+    return null;
+  }
 
   // 7. Create Transaction
   logger.info("[STEP 7] Creating Transaction", {
