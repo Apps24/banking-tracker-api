@@ -2,13 +2,24 @@ import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { responseHelper } from "../utils/responseHelper";
 import {
-  getTransactions, getTransaction, updateTransaction,
+  getTransactions, getTransaction, createTransaction, updateTransaction,
   deleteTransaction, processSingleSms, processBatchSms,
 } from "../services/transaction.service";
 import type { TransactionFilters } from "../services/transaction.service";
 import { TransactionType, TransactionCategory, TransactionMode } from "@prisma/client";
 
 // ── Validation schemas ─────────────────────────────────────────────────────────
+
+const createTransactionSchema = z.object({
+  type:            z.enum(["CREDIT", "DEBIT"]),
+  amount:          z.number().positive(),
+  bankId:          z.string().min(1),
+  date:            z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD"),
+  description:     z.string().max(500).optional(),
+  merchant:        z.string().max(200).optional(),
+  category:        z.nativeEnum(TransactionCategory),
+  transactionMode: z.nativeEnum(TransactionMode).optional(),
+});
 
 const smsSchema = z.object({
   sender:     z.string().min(1).max(50),
@@ -21,6 +32,14 @@ const batchSmsSchema = z.object({
 });
 
 // ── Controllers ───────────────────────────────────────────────────────────────
+
+export const create = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = createTransactionSchema.parse(req.body);
+    const tx = await createTransaction(req.userId, data);
+    responseHelper.success(res, tx, "Transaction created", 201);
+  } catch (err) { next(err); }
+};
 
 export const list = async (req: Request, res: Response, next: NextFunction) => {
   try {

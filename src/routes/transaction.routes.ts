@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { requireAuth } from "../middlewares/auth.middleware";
-import { list, getOne, update, remove, processSms, processBatch } from "../controllers/transaction.controller";
+import { create, list, getOne, update, remove, processSms, processBatch } from "../controllers/transaction.controller";
 
 const router = Router();
 
 router.use(requireAuth);
 
+router.post("/",             create);
 router.get("/",              list);
 router.get("/:id",           getOne);
 router.patch("/:id",         update);

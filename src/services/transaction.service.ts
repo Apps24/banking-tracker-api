@@ -120,6 +120,59 @@ export async function deleteTransaction(userId: string, id: string) {
   await prisma.transaction.delete({ where: { id } });
 }
 
+export type CreateTransactionInput = {
+  type: TransactionType;
+  amount: number;
+  bankId: string;
+  date: string;           // ISO date string "YYYY-MM-DD"
+  description?: string;
+  merchant?: string;
+  category: TransactionCategory;
+  transactionMode?: TransactionMode;
+  currency?: string;
+};
+
+export async function createTransaction(userId: string, input: CreateTransactionInput) {
+  const { type, amount, bankId, date, description, merchant, category, transactionMode, currency } = input;
+
+  // Verify bank belongs to this user
+  const bank = await prisma.bank.findFirst({ where: { id: bankId, userId } });
+  if (!bank) throw new AppError("Bank not found", 404);
+
+  // Find first active account for this bank, or create a default one
+  let account = await prisma.bankAccount.findFirst({ where: { userId, bankId, isActive: true } });
+  if (!account) {
+    account = await prisma.bankAccount.create({
+      data: { userId, bankId, accountNumber: "0000", accountType: "SAVINGS", currency: currency ?? "INR" },
+    });
+  }
+
+  const txDate = new Date(date + "T12:00:00.000+05:30");
+  const desc = description?.trim() ||
+    (type === "CREDIT" ? "Manual credit entry" : `Payment to ${merchant ?? "unknown"}`);
+
+  return prisma.transaction.create({
+    data: {
+      userId,
+      accountId: account.id,
+      bankId,
+      type,
+      amount,
+      currency: currency ?? "INR",
+      description: desc,
+      merchant: merchant?.trim() || null,
+      transactionMode: transactionMode ?? "OTHER",
+      category,
+      smsDate: txDate,
+      rawSms: "",
+    },
+    include: {
+      bank:    { select: { id: true, name: true, shortCode: true, color: true } },
+      account: { select: { id: true, accountNumber: true, accountType: true } },
+    },
+  });
+}
+
 export async function processSingleSms(
   userId: string,
   sender: string,
